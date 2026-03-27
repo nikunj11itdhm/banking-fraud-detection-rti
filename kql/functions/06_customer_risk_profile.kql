@@ -1,0 +1,74 @@
+// ============================================================================
+// Function: CustomerRiskProfile
+// Description: Builds a comprehensive risk profile per customer by combining
+//              transaction patterns, fraud history, and cross-border behavior
+//              into a weighted composite risk score with category assignment.
+// ============================================================================
+
+.create-or-alter function with (docstring = "", folder = "") CustomerRiskProfile()
+{
+    let fraud_txns = FraudDetection()
+    | where is_fraudulent == true
+    | summarize fraud_count = count(), total_fraud_amount = sum(amount) by customer_id;
+    
+    Transactions
+    | summarize 
+        total_transactions = count(),
+        total_amount = sum(amount),
+        avg_amount = avg(amount),
+        max_amount = max(amount),
+        unique_merchants = dcount(merchant_id),
+        unique_countries = dcount(merchant_country),
+        cross_border_txns = countif(customer_country != merchant_country),
+        high_amount_txns = countif(amount > 1000),
+        unusual_time_txns = countif(datetime_part('hour', timestamp) >= 0 and datetime_part('hour', timestamp) <= 6),
+        card_not_present_txns = countif(card_present == false)
+        by customer_id
+    | join kind=leftouter (fraud_txns) on customer_id
+    | join kind=inner (Customers) on customer_id
+    | extend 
+        fraud_count = coalesce(fraud_count, 0),
+        total_fraud_amount = coalesce(total_fraud_amount, 0.0)
+    | extend 
+        fraud_rate = round(100.0 * fraud_count / total_transactions, 2),
+        cross_border_rate = round(100.0 * cross_border_txns / total_transactions, 2),
+        high_amount_rate = round(100.0 * high_amount_txns / total_transactions, 2)
+    // Calculate composite risk score (0-100)
+    | extend computed_risk_score = 
+        (fraud_rate * 0.4) +  // 40% weight to fraud rate
+        (cross_border_rate * 0.2) +  // 20% weight to cross-border
+        (high_amount_rate * 0.15) +  // 15% weight to high amounts
+        (customer_risk_score * 0.25)  // 25% weight to original risk score
+    | extend risk_category = case(
+        computed_risk_score >= 75, "Critical",
+        computed_risk_score >= 50, "High",
+        computed_risk_score >= 25, "Medium",
+        "Low"
+    )
+    | project 
+        customer_id,
+        customer_name,
+        email,
+        phone,
+        city,
+        state,
+        country,
+        original_risk_score = customer_risk_score,
+        computed_risk_score = round(computed_risk_score, 2),
+        risk_category,
+        total_transactions,
+        fraud_count,
+        fraud_rate,
+        total_amount = round(total_amount, 2),
+        total_fraud_amount = round(total_fraud_amount, 2),
+        avg_amount = round(avg_amount, 2),
+        max_amount,
+        unique_merchants,
+        unique_countries,
+        cross_border_txns,
+        cross_border_rate,
+        high_amount_txns,
+        unusual_time_txns,
+        card_not_present_txns
+    | order by computed_risk_score desc
+}

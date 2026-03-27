@@ -1,0 +1,43 @@
+// ============================================================================
+// Function: AccountTakeoverDetection
+// Description: Identifies potential account takeover patterns by detecting
+//              anomalous 1-hour windows with excessive transactions, multiple
+//              geographic locations, or late-night high-value activity.
+// ============================================================================
+
+.create-or-alter function with (docstring = "", folder = "") AccountTakeoverDetection()
+{
+    Transactions
+    | summarize 
+        transaction_count = count(),
+        unique_locations = dcount(merchant_country),
+        unique_merchants = dcount(merchant_id),
+        unusual_time_count = countif(datetime_part('hour', timestamp) >= 0 and datetime_part('hour', timestamp) <= 6),
+        high_amount_count = countif(amount > 1000),
+        total_amount = sum(amount)
+        by account_id, bin(timestamp, 1h)  // 1-hour windows
+    | where transaction_count > 10  // More than 10 txns in 1 hour
+        or unique_locations > 3  // From 3+ countries in 1 hour
+        or (unusual_time_count > 3 and high_amount_count > 2)  // Multiple late-night high-value txns
+    | join kind=inner (BankAccounts) on account_id
+    | join kind=inner (Customers) on customer_id
+    | project 
+        timestamp,
+        account_id,
+        customer_name,
+        email,
+        phone,
+        account_type,
+        transaction_count,
+        unique_locations,
+        unique_merchants,
+        unusual_time_count,
+        high_amount_count,
+        total_amount = round(total_amount, 2),
+        threat_level = case(
+            unique_locations > 3 and high_amount_count > 2, "Critical",
+            transaction_count > 15, "High",
+            "Medium"
+        )
+    | order by threat_level, transaction_count desc
+}

@@ -1,0 +1,33 @@
+// ============================================================================
+// Function: UnusualTimeDetection
+// Description: Flags transactions occurring during unusual hours (12 AM -
+//              6 AM) with amounts over $200, enriched with customer and
+//              account details for investigation.
+// ============================================================================
+
+.create-or-alter function with (docstring = "", folder = "") UnusualTimeDetection()
+{
+    Transactions
+    | extend hour = datetime_part('hour', timestamp)
+    | extend day_of_week = dayofweek(timestamp)
+    // Flag unusual times: 12 AM - 6 AM
+    | where hour >= 0 and hour <= 6
+    | where amount > 200  // Focus on significant amounts
+    | join kind=inner (Customers) on customer_id
+    | join kind=inner (BankAccounts) on account_id
+    | project 
+        timestamp,
+        hour,
+        day_of_week,
+        transaction_id,
+        customer_name,
+        email,
+        phone,
+        amount,
+        merchant_name,
+        merchant_category,
+        channel,
+        account_type,
+        customer_risk_score
+    | order by timestamp desc
+}

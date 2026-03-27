@@ -1,0 +1,32 @@
+// ============================================================================
+// Function: CrossBorderFraud
+// Description: Identifies cross-border transactions where the customer and
+//              merchant are in different countries, focusing on significant
+//              amounts and classifying risk severity.
+// ============================================================================
+
+.create-or-alter function with (docstring = "", folder = "") CrossBorderFraud()
+{
+    Transactions
+    | where customer_country != merchant_country
+    | where amount > 100  // Focus on significant amounts
+    | join kind=inner (Customers) on customer_id
+    | project 
+        timestamp,
+        transaction_id,
+        customer_name,
+        customer_country,
+        merchant_name,
+        merchant_country,
+        amount,
+        currency,
+        channel,
+        customer_risk_score,
+        merchant_risk_level
+    | extend risk_level = case(
+        amount > 1000 and merchant_risk_level == "High", "Critical",
+        amount > 500, "High",
+        "Medium"
+    )
+    | order by amount desc
+}

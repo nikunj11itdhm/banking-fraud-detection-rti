@@ -1,0 +1,24 @@
+// ============================================================================
+// Function: RealTimeFraudDashboard
+// Description: Real-time fraud dashboard summary using all detection
+//              functions. Aggregates alerts from fraud scoring, velocity,
+//              cross-border, amount anomaly, unusual time, and account
+//              takeover detections into a unified feed.
+// ============================================================================
+
+.create-or-alter function with (docstring = "Real-time fraud dashboard summary using all detection functions", folder = "Dashboard") RealTimeFraudDashboard()
+{
+    let fraud_alerts = FraudDetection() | where is_fraudulent == true;
+    let velocity_alerts = VelocityDetection();
+    let crossborder_alerts = CrossBorderFraud() | where risk_level == 'Critical';
+    let amount_anomalies = AmountAnomalyDetection();
+    let unusual_time = UnusualTimeDetection();
+    let account_takeover = AccountTakeoverDetection();
+    union
+        (fraud_alerts | extend detection_type = 'Fraud Score', severity = case(fraud_score >= 90, 'Critical', fraud_score >= 70, 'High', 'Medium') | project timestamp, transaction_id, customer_id, amount, detection_type, severity, details = strcat('Score: ', tostring(fraud_score), ' | Type: ', fraud_type)),
+        (velocity_alerts | extend detection_type = 'Velocity', severity = case(high_velocity, 'Critical', 'High') | project timestamp, transaction_id, customer_id, amount, detection_type, severity, details = strcat('Gap: ', tostring(time_diff_minutes), 'min | Merchant: ', merchant_name)),
+        (crossborder_alerts | extend detection_type = 'Cross-Border', severity = risk_level | project timestamp, transaction_id, customer_id = customer_name, amount, detection_type, severity, details = strcat(customer_country, ' -> ', merchant_country, ' | ', merchant_name)),
+        (amount_anomalies | extend detection_type = 'Amount Anomaly', severity = case(deviation_ratio > 10, 'Critical', 'High') | project timestamp, transaction_id, customer_id = customer_name, amount, detection_type, severity, details = strcat('Deviation: ', tostring(deviation_ratio), 'x avg | Avg: $', tostring(avg_amount))),
+        (account_takeover | extend detection_type = 'Account Takeover', severity = threat_level | project timestamp, transaction_id = account_id, customer_id = customer_name, amount = total_amount, detection_type, severity, details = strcat('Txns: ', tostring(transaction_count), ' | Countries: ', tostring(unique_locations)))
+    | order by timestamp desc
+}

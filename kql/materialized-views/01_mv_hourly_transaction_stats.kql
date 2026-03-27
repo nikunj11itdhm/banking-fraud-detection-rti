@@ -1,0 +1,20 @@
+// ============================================================================
+// Materialized View: mv_HourlyTransactionStats
+// Description: Pre-aggregated hourly transaction statistics by type and
+//              channel, including cross-border, high-risk, and CNP counts.
+// Source: Transactions
+// ============================================================================
+
+.create materialized-view with (backfill=true) mv_HourlyTransactionStats on table Transactions
+{
+    Transactions
+    | summarize
+        TxnCount=count(),
+        TotalAmount=sum(amount),
+        AvgAmount=avg(amount),
+        MaxAmount=max(amount),
+        CrossBorderCount=countif(customer_country != merchant_country),
+        HighRiskMerchantCount=countif(merchant_risk_level == 'High'),
+        CardNotPresentCount=countif(card_present == false)
+        by bin(timestamp, 1h), transaction_type, channel
+}

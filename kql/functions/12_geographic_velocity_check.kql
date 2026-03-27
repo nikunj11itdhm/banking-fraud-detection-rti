@@ -1,0 +1,33 @@
+// ============================================================================
+// Function: GeographicVelocityCheck
+// Description: Impossible travel detection - transactions from distant
+//              countries within short timeframes. Flags customers transacting
+//              in different countries within 4 hours with severity grading.
+// ============================================================================
+
+.create-or-alter function with (docstring = "Impossible travel detection - transactions from distant countries within short timeframes", folder = "FraudDetection") GeographicVelocityCheck()
+{
+    Transactions
+    | order by customer_id, timestamp asc
+    | extend prev_country = prev(merchant_country, 1), prev_customer = prev(customer_id, 1), prev_timestamp = prev(timestamp, 1)
+    | where customer_id == prev_customer
+    | where merchant_country != prev_country
+    | extend time_gap_hours = datetime_diff('hour', timestamp, prev_timestamp)
+    | where time_gap_hours < 4
+    | join kind=inner (Customers) on customer_id
+    | project
+        timestamp,
+        transaction_id,
+        customer_id,
+        customer_name,
+        email,
+        from_country = prev_country,
+        to_country = merchant_country,
+        time_gap_hours,
+        amount,
+        merchant_name,
+        channel,
+        customer_risk_score,
+        severity = case(time_gap_hours < 1, 'Critical', time_gap_hours < 2, 'High', 'Medium')
+    | order by time_gap_hours asc
+}

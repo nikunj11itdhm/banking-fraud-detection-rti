@@ -1,0 +1,201 @@
+// ============================================================================
+// Banking Fraud Detection - Full Deployment Script
+// ============================================================================
+// Execute each section in order. Each step references an individual KQL file
+// that can also be run independently.
+// ============================================================================
+
+// ============================================================================
+// STEP 1: Create Tables
+// Create all base tables for customers, accounts, merchants, transactions,
+// and fraud alerts.
+// ============================================================================
+
+// 1a. Customers — core customer reference data
+// Source: kql/tables/01_create_customers.kql
+.create-merge table Customers (
+    customer_id: string, customer_name: string, email: string, phone: string,
+    address: string, city: string, state: string, country: string,
+    postal_code: string, account_creation_date: datetime,
+    customer_risk_score: int, is_high_risk_customer: bool,
+    entity_type: string, ingestion_timestamp: datetime
+)
+
+// 1b. BankAccounts — account details linked to customers
+// Source: kql/tables/02_create_bankaccounts.kql
+.create-merge table BankAccounts (
+    account_id: string, customer_id: string, account_type: string,
+    account_status: string, opening_date: datetime, current_balance: real,
+    credit_limit: real, daily_transaction_limit: real,
+    entity_type: string, ingestion_timestamp: datetime
+)
+
+// 1c. Merchants — merchant reference data with risk levels
+// Source: kql/tables/03_create_merchants.kql
+.create-merge table Merchants (
+    merchant_id: string, merchant_name: string, merchant_category: string,
+    merchant_country: string, risk_level: string,
+    entity_type: string, ingestion_timestamp: datetime
+)
+
+// 1d. Transactions — primary transaction event table
+// Source: kql/tables/04_create_transactions.kql
+.create-merge table Transactions (
+    transaction_id: string, timestamp: datetime, account_id: string,
+    customer_id: string, merchant_id: string, merchant_name: string,
+    merchant_category: string, amount: real, currency: string,
+    transaction_type: string, channel: string, card_present: bool,
+    merchant_country: string, customer_city: string, customer_country: string,
+    customer_risk_score: int, merchant_risk_level: string,
+    entity_type: string, ingestion_timestamp: datetime
+)
+
+// 1e. FraudAlerts — generated alerts from detection pipeline
+// Source: kql/tables/05_create_fraudalerts.kql
+.create-merge table FraudAlerts (
+    alert_id: string, transaction_id: string, timestamp: datetime,
+    customer_id: string, account_id: string, merchant_id: string,
+    merchant_name: string, amount: real, fraud_score: long,
+    fraud_type: string, is_fraudulent: bool, unusual_time: bool,
+    unusual_location: bool, amount_flag: bool, high_risk_merchant: bool,
+    high_risk_customer: bool, card_not_present_risk: bool, channel: string,
+    merchant_country: string, customer_country: string,
+    alert_timestamp: datetime, alert_status: string
+)
+
+// ============================================================================
+// STEP 2: Policies
+// Configure ingestion and caching policies before loading data.
+// ============================================================================
+
+// 2a. Enable streaming ingestion on Transactions for real-time processing
+// Source: kql/policies/01_streaming_ingestion.kql
+.alter table Transactions policy streamingingestion enable
+
+// 2b. Set 30-day hot cache on FraudAlerts for fast queries
+// Source: kql/policies/02_caching.kql
+.alter table FraudAlerts policy caching hot = 30d
+
+// ============================================================================
+// STEP 3: Functions — Core Detection
+// Deploy fraud detection functions. Order matters: base functions first,
+// then functions that depend on them.
+// ============================================================================
+
+// 3a. FraudDetection — multi-rule fraud scoring engine (base function)
+// Source: kql/functions/01_fraud_detection.kql
+// → Used by: FraudAlertTransform, RealTimeFraudDashboard, CustomerRiskProfile,
+//            FraudInvestigator, FraudSummaryKPIs
+
+// 3b. VelocityDetection — rapid-fire transaction detection
+// Source: kql/functions/02_velocity_detection.kql
+// → Used by: RealTimeFraudDashboard, FraudInvestigator, FraudSummaryKPIs
+
+// 3c. CrossBorderFraud — cross-country transaction analysis
+// Source: kql/functions/03_cross_border_fraud.kql
+// → Used by: RealTimeFraudDashboard, FraudSummaryKPIs
+
+// 3d. AmountAnomalyDetection — statistical outlier detection
+// Source: kql/functions/04_amount_anomaly_detection.kql
+// → Used by: RealTimeFraudDashboard
+
+// 3e. UnusualTimeDetection — off-hours activity flagging
+// Source: kql/functions/05_unusual_time_detection.kql
+// → Used by: RealTimeFraudDashboard
+
+// ============================================================================
+// STEP 4: Functions — Advanced Detection & Risk Profiling
+// These functions may depend on the core detection functions above.
+// ============================================================================
+
+// 4a. CustomerRiskProfile — composite customer risk scoring
+// Source: kql/functions/06_customer_risk_profile.kql
+// → Depends on: FraudDetection
+
+// 4b. AccountTakeoverDetection — account compromise detection
+// Source: kql/functions/07_account_takeover_detection.kql
+// → Used by: RealTimeFraudDashboard
+
+// 4c. FraudAlertTransform — alert generation pipeline
+// Source: kql/functions/08_fraud_alert_transform.kql
+// → Depends on: FraudDetection
+
+// ============================================================================
+// STEP 5: Functions — Dashboard & Investigation
+// High-level functions that aggregate results from multiple detectors.
+// ============================================================================
+
+// 5a. RealTimeFraudDashboard — unified alert feed from all detectors
+// Source: kql/functions/09_realtime_fraud_dashboard.kql
+// → Depends on: FraudDetection, VelocityDetection, CrossBorderFraud,
+//               AmountAnomalyDetection, UnusualTimeDetection, AccountTakeoverDetection
+
+// 5b. MultiChannelSwitching — rapid channel switching detection
+// Source: kql/functions/10_multi_channel_switching.kql
+
+// 5c. MerchantCategoryAnomaly — spending pattern anomaly detection
+// Source: kql/functions/11_merchant_category_anomaly.kql
+
+// 5d. GeographicVelocityCheck — impossible travel detection
+// Source: kql/functions/12_geographic_velocity_check.kql
+
+// 5e. FraudInvestigator — per-customer investigation tool
+// Source: kql/functions/13_fraud_investigator.kql
+// → Depends on: FraudDetection, VelocityDetection, CustomerRiskProfile
+
+// 5f. FraudSummaryKPIs — executive KPI summary
+// Source: kql/functions/14_fraud_summary_kpis.kql
+// → Depends on: FraudDetection, VelocityDetection, CrossBorderFraud
+
+// ============================================================================
+// STEP 6: Materialized Views
+// Create materialized views for pre-aggregated analytics. These require
+// the Transactions table to exist and will backfill from existing data.
+// ============================================================================
+
+// 6a. Hourly transaction statistics by type and channel
+// Source: kql/materialized-views/01_mv_hourly_transaction_stats.kql
+.create materialized-view with (backfill=true) mv_HourlyTransactionStats on table Transactions
+{
+    Transactions
+    | summarize
+        TxnCount=count(), TotalAmount=sum(amount), AvgAmount=avg(amount),
+        MaxAmount=max(amount),
+        CrossBorderCount=countif(customer_country != merchant_country),
+        HighRiskMerchantCount=countif(merchant_risk_level == 'High'),
+        CardNotPresentCount=countif(card_present == false)
+        by bin(timestamp, 1h), transaction_type, channel
+}
+
+// 6b. Daily per-customer risk aggregation
+// Source: kql/materialized-views/02_mv_customer_daily_risk.kql
+.create materialized-view with (backfill=true) mv_CustomerDailyRisk on table Transactions
+{
+    Transactions
+    | summarize
+        DailyTxnCount=count(), DailyAmount=sum(amount), DailyAvg=avg(amount),
+        DailyMax=max(amount), UniqueCountries=dcount(merchant_country),
+        UniqueMerchants=dcount(merchant_id),
+        NightTxns=countif(datetime_part('hour', timestamp) >= 0 and datetime_part('hour', timestamp) <= 6),
+        HighAmountTxns=countif(amount > 1000),
+        CrossBorderTxns=countif(customer_country != merchant_country)
+        by customer_id, bin(timestamp, 1d)
+}
+
+// 6c. Merchant-level risk profile aggregation
+// Source: kql/materialized-views/03_mv_merchant_risk_profile.kql
+.create materialized-view with (backfill=true) mv_MerchantRiskProfile on table Transactions
+{
+    Transactions
+    | summarize
+        TxnCount=count(), TotalAmount=sum(amount), AvgAmount=avg(amount),
+        UniqueCustomers=dcount(customer_id),
+        HighRiskCustomerTxns=countif(customer_risk_score > 75),
+        NightTxns=countif(datetime_part('hour', timestamp) >= 0 and datetime_part('hour', timestamp) <= 6),
+        CardNotPresentTxns=countif(card_present == false)
+        by merchant_id, merchant_name, merchant_category, merchant_country, merchant_risk_level
+}
+
+// ============================================================================
+// Deployment complete!
+// ============================================================================

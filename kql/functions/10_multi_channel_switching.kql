@@ -1,0 +1,40 @@
+// ============================================================================
+// Function: MultiChannelSwitching
+// Description: Detect rapid channel switching - indicator of account
+//              compromise. Flags customers switching between channels (ATM,
+//              online, mobile, POS) 3+ times within 30-minute windows.
+// ============================================================================
+
+.create-or-alter function with (docstring = "Detect rapid channel switching - indicator of account compromise", folder = "FraudDetection") MultiChannelSwitching()
+{
+    Transactions
+    | order by customer_id, timestamp asc
+    | extend prev_channel = prev(channel, 1), prev_customer = prev(customer_id, 1), prev_timestamp = prev(timestamp, 1)
+    | where customer_id == prev_customer
+    | where channel != prev_channel
+    | extend switch_gap_minutes = datetime_diff('minute', timestamp, prev_timestamp)
+    | where switch_gap_minutes < 30
+    | summarize 
+        channel_switches = count(),
+        channels_used = make_set(channel),
+        total_amount = sum(amount),
+        first_switch = min(timestamp),
+        last_switch = max(timestamp)
+        by customer_id, bin(timestamp, 1h)
+    | where channel_switches >= 3
+    | join kind=inner (Customers) on customer_id
+    | project
+        timestamp,
+        customer_id,
+        customer_name,
+        email,
+        phone,
+        channel_switches,
+        channels_used,
+        total_amount = round(total_amount, 2),
+        first_switch,
+        last_switch,
+        customer_risk_score,
+        severity = case(channel_switches >= 5, 'Critical', channel_switches >= 3, 'High', 'Medium')
+    | order by channel_switches desc
+}

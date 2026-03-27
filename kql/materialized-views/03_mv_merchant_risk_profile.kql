@@ -1,0 +1,21 @@
+// ============================================================================
+// Materialized View: mv_MerchantRiskProfile
+// Description: Merchant-level risk profile aggregation including transaction
+//              volume, unique customers, high-risk customer transactions,
+//              night activity, and card-not-present counts.
+// Source: Transactions
+// ============================================================================
+
+.create materialized-view with (backfill=true) mv_MerchantRiskProfile on table Transactions
+{
+    Transactions
+    | summarize
+        TxnCount=count(),
+        TotalAmount=sum(amount),
+        AvgAmount=avg(amount),
+        UniqueCustomers=dcount(customer_id),
+        HighRiskCustomerTxns=countif(customer_risk_score > 75),
+        NightTxns=countif(datetime_part('hour', timestamp) >= 0 and datetime_part('hour', timestamp) <= 6),
+        CardNotPresentTxns=countif(card_present == false)
+        by merchant_id, merchant_name, merchant_category, merchant_country, merchant_risk_level
+}

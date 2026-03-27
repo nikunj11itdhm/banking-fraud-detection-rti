@@ -1,0 +1,7 @@
+// ============================================================================
+// Policy: Caching
+// Description: Configure hot cache on FraudAlerts table to keep 30 days of
+//              data in SSD/RAM for fast dashboard and investigation queries.
+// ============================================================================
+
+.alter table FraudAlerts policy caching hot = 30d

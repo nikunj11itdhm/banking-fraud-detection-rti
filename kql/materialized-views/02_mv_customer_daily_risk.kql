@@ -1,0 +1,23 @@
+// ============================================================================
+// Materialized View: mv_CustomerDailyRisk
+// Description: Daily per-customer risk aggregation including transaction
+//              volume, geographic diversity, night activity, and high-value
+//              transaction counts.
+// Source: Transactions
+// ============================================================================
+
+.create materialized-view with (backfill=true) mv_CustomerDailyRisk on table Transactions
+{
+    Transactions
+    | summarize
+        DailyTxnCount=count(),
+        DailyAmount=sum(amount),
+        DailyAvg=avg(amount),
+        DailyMax=max(amount),
+        UniqueCountries=dcount(merchant_country),
+        UniqueMerchants=dcount(merchant_id),
+        NightTxns=countif(datetime_part('hour', timestamp) >= 0 and datetime_part('hour', timestamp) <= 6),
+        HighAmountTxns=countif(amount > 1000),
+        CrossBorderTxns=countif(customer_country != merchant_country)
+        by customer_id, bin(timestamp, 1d)
+}

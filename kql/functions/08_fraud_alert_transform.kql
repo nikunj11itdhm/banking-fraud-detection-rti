@@ -1,0 +1,38 @@
+// ============================================================================
+// Function: FraudAlertTransform
+// Description: Transform detected fraud into alerts using FraudDetection
+//              function. Generates alert records with unique IDs, timestamps,
+//              and lifecycle status for the FraudAlerts table.
+// ============================================================================
+
+.create-or-alter function with (docstring = "Transform detected fraud into alerts using FraudDetection function", folder = "FraudPipeline") FraudAlertTransform()
+{
+    FraudDetection()
+    | where is_fraudulent == true
+    | extend alert_id = strcat('ALERT-', transaction_id)
+    | extend alert_timestamp = now()
+    | extend alert_status = 'New'
+    | project 
+        alert_id,
+        transaction_id,
+        timestamp,
+        customer_id,
+        account_id,
+        merchant_id,
+        merchant_name,
+        amount,
+        fraud_score,
+        fraud_type,
+        is_fraudulent,
+        unusual_time,
+        unusual_location,
+        amount_flag,
+        high_risk_merchant,
+        high_risk_customer,
+        card_not_present_risk,
+        channel,
+        merchant_country,
+        customer_country,
+        alert_timestamp,
+        alert_status
+}

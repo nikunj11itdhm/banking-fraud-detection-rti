@@ -1,0 +1,27 @@
+// ============================================================================
+// Table: Transactions
+// Description: Core transaction events enriched with customer, merchant, and
+//              risk metadata. Primary source for all fraud detection analytics.
+// ============================================================================
+
+.create-merge table Transactions (
+    transaction_id: string,
+    timestamp: datetime,
+    account_id: string,
+    customer_id: string,
+    merchant_id: string,
+    merchant_name: string,
+    merchant_category: string,
+    amount: real,
+    currency: string,
+    transaction_type: string,
+    channel: string,
+    card_present: bool,
+    merchant_country: string,
+    customer_city: string,
+    customer_country: string,
+    customer_risk_score: int,
+    merchant_risk_level: string,
+    entity_type: string,
+    ingestion_timestamp: datetime
+)

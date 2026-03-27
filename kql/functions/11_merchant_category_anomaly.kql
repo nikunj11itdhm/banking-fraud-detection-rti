@@ -1,0 +1,32 @@
+// ============================================================================
+// Function: MerchantCategoryAnomaly
+// Description: Detect unusual merchant category spending patterns per
+//              customer. Compares recent daily spending against historical
+//              baselines to identify anomalous category activity.
+// ============================================================================
+
+.create-or-alter function with (docstring = "Detect unusual merchant category spending patterns per customer", folder = "FraudDetection") MerchantCategoryAnomaly()
+{
+    let customer_category_baseline = Transactions
+    | summarize baseline_amount = avg(amount), baseline_count = count() by customer_id, merchant_category;
+    Transactions
+    | summarize recent_amount = sum(amount), recent_count = count() by customer_id, merchant_category, bin(timestamp, 1d)
+    | join kind=inner (customer_category_baseline) on customer_id, merchant_category
+    | where recent_amount > (baseline_amount * 5) or recent_count > (baseline_count * 3)
+    | extend anomaly_ratio = round(recent_amount / baseline_amount, 2)
+    | join kind=inner (Customers) on customer_id
+    | project
+        timestamp,
+        customer_id,
+        customer_name,
+        email,
+        merchant_category,
+        recent_amount = round(recent_amount, 2),
+        baseline_amount = round(baseline_amount, 2),
+        anomaly_ratio,
+        recent_count,
+        baseline_count,
+        customer_risk_score,
+        severity = case(anomaly_ratio > 10, 'Critical', anomaly_ratio > 5, 'High', 'Medium')
+    | order by anomaly_ratio desc
+}

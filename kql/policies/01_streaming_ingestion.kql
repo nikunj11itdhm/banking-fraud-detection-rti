@@ -1,0 +1,7 @@
+// ============================================================================
+// Policy: Streaming Ingestion
+// Description: Enable streaming ingestion on the Transactions table to
+//              support real-time fraud detection with minimal latency.
+// ============================================================================
+
+.alter table Transactions policy streamingingestion enable

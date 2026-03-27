@@ -1,0 +1,30 @@
+// ============================================================================
+// Function: VelocityDetection
+// Description: Detects rapid-fire transactions on the same account by
+//              measuring time gaps between consecutive transactions. Flags
+//              transactions occurring within 5 minutes (critical if < 1 min).
+// ============================================================================
+
+.create-or-alter function with (docstring = "", folder = "") VelocityDetection()
+{
+    Transactions
+    | order by account_id, timestamp asc
+    | extend prev_timestamp = prev(timestamp, 1) 
+    | extend prev_account = prev(account_id, 1)
+    | extend time_diff_minutes = datetime_diff('minute', timestamp, prev_timestamp)
+    | where account_id == prev_account
+    | extend velocity_flag = time_diff_minutes < 5  // Less than 5 min between txns
+    | extend high_velocity = time_diff_minutes < 1  // Less than 1 min (critical)
+    | where velocity_flag == true
+    | project 
+        timestamp, 
+        transaction_id, 
+        account_id, 
+        customer_id,
+        amount, 
+        time_diff_minutes,
+        high_velocity,
+        merchant_name,
+        merchant_category,
+        channel
+}

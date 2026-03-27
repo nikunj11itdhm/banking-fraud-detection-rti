@@ -1,0 +1,28 @@
+// ============================================================================
+// Function: FraudInvestigator
+// Description: Comprehensive fraud investigation for a specific customer.
+//              Aggregates customer info, accounts, transactions, fraud flags,
+//              velocity alerts, and risk profiles into a unified view.
+// Parameters:  target_customer_id (string) - The customer ID to investigate
+// ============================================================================
+
+.create-or-alter function with (docstring = "Comprehensive fraud investigation for a specific customer", folder = "Investigation") FraudInvestigator(target_customer_id:string)
+{
+    let cust_info = Customers | where customer_id == target_customer_id;
+    let cust_accounts = BankAccounts | where customer_id == target_customer_id;
+    let cust_txns = Transactions | where customer_id == target_customer_id | order by timestamp desc;
+    let fraud_flags = FraudDetection() | where customer_id == target_customer_id and is_fraudulent == true;
+    let velocity_flags = VelocityDetection() | where customer_id == target_customer_id;
+    let risk_profile = CustomerRiskProfile() | where customer_id == target_customer_id;
+    union
+        (cust_info | extend section = 'Customer Info' | project section, key = 'Name', value = customer_name),
+        (cust_info | extend section = 'Customer Info' | project section, key = 'Email', value = email),
+        (cust_info | extend section = 'Customer Info' | project section, key = 'Risk Score', value = tostring(customer_risk_score)),
+        (cust_info | extend section = 'Customer Info' | project section, key = 'City', value = city),
+        (cust_info | extend section = 'Customer Info' | project section, key = 'Country', value = country),
+        (risk_profile | extend section = 'Risk Profile' | project section, key = 'Computed Risk', value = tostring(computed_risk_score)),
+        (risk_profile | extend section = 'Risk Profile' | project section, key = 'Risk Category', value = risk_category),
+        (risk_profile | extend section = 'Risk Profile' | project section, key = 'Fraud Rate %', value = tostring(fraud_rate)),
+        (risk_profile | extend section = 'Risk Profile' | project section, key = 'Total Txns', value = tostring(total_transactions)),
+        (risk_profile | extend section = 'Risk Profile' | project section, key = 'Fraud Count', value = tostring(fraud_count))
+}

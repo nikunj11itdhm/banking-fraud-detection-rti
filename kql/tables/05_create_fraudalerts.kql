@@ -1,0 +1,30 @@
+// ============================================================================
+// Table: FraudAlerts
+// Description: Generated fraud alerts from detection functions, capturing
+//              fraud scores, rule flags, and alert lifecycle status.
+// ============================================================================
+
+.create-merge table FraudAlerts (
+    alert_id: string,
+    transaction_id: string,
+    timestamp: datetime,
+    customer_id: string,
+    account_id: string,
+    merchant_id: string,
+    merchant_name: string,
+    amount: real,
+    fraud_score: long,
+    fraud_type: string,
+    is_fraudulent: bool,
+    unusual_time: bool,
+    unusual_location: bool,
+    amount_flag: bool,
+    high_risk_merchant: bool,
+    high_risk_customer: bool,
+    card_not_present_risk: bool,
+    channel: string,
+    merchant_country: string,
+    customer_country: string,
+    alert_timestamp: datetime,
+    alert_status: string
+)

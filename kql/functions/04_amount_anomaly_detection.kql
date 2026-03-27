@@ -1,0 +1,34 @@
+// ============================================================================
+// Function: AmountAnomalyDetection
+// Description: Detects transactions where the amount significantly exceeds
+//              the customer's historical average (5x or more deviation),
+//              indicating potential fraud or unauthorized activity.
+// ============================================================================
+
+.create-or-alter function with (docstring = "", folder = "") AmountAnomalyDetection()
+{
+    let customer_avg = Transactions
+    | summarize 
+        avg_amount = avg(amount),
+        max_amount = max(amount),
+        total_transactions = count()
+        by customer_id;
+    Transactions
+    | join kind=inner (customer_avg) on customer_id
+    | extend deviation_ratio = amount / avg_amount
+    | where deviation_ratio > 5  // Transaction is 5x higher than average
+    | join kind=inner (Customers) on customer_id
+    | project 
+        timestamp,
+        transaction_id,
+        customer_name,
+        email,
+        amount,
+        avg_amount = round(avg_amount, 2),
+        deviation_ratio = round(deviation_ratio, 2),
+        merchant_name,
+        merchant_category,
+        total_transactions,
+        customer_risk_score
+    | order by deviation_ratio desc
+}

@@ -1,0 +1,190 @@
+// =============================================================================
+// Banking Fraud Detection — KQL Queryset for Real-Time Dashboard
+// Workspace: RTI_IQ_01 | KQL DB: BankingFraudDB
+// =============================================================================
+
+// =============================================================================
+// TILE 1: FRAUD KPIs (Stat tiles at the top)
+// =============================================================================
+FraudSummaryKPIs()
+
+// =============================================================================
+// TILE 2: FRAUD TREND — Hourly fraud detection count (Timechart)
+// =============================================================================
+FraudDetection()
+| where is_fraudulent == true
+| summarize 
+    FraudCount = count(), 
+    TotalFraudAmount = round(sum(amount), 2)
+    by bin(timestamp, 1h)
+| order by timestamp asc
+| render timechart 
+    with (title="Fraud Detections Over Time", xtitle="Time", ytitle="Count")
+
+// =============================================================================
+// TILE 3: FRAUD BY TYPE — Pie chart of fraud categories
+// =============================================================================
+FraudDetection()
+| where is_fraudulent == true
+| summarize Count = count(), TotalAmount = round(sum(amount), 2) by fraud_type
+| order by Count desc
+| render piechart with (title="Fraud Distribution by Type")
+
+// =============================================================================
+// TILE 4: REAL-TIME ALERT FEED — Latest alerts with severity
+// =============================================================================
+RealTimeFraudDashboard()
+| take 50
+
+// =============================================================================
+// TILE 5: FRAUD AMOUNT HEATMAP — By channel and transaction type
+// =============================================================================
+FraudDetection()
+| where is_fraudulent == true
+| summarize 
+    FraudAmount = round(sum(amount), 2),
+    FraudCount = count()
+    by channel, transaction_type
+| order by FraudAmount desc
+| render columnchart 
+    with (title="Fraud Amount by Channel & Type", kind=stacked)
+
+// =============================================================================
+// TILE 6: TOP FRAUD CUSTOMERS — Risk profile
+// =============================================================================
+CustomerRiskProfile()
+| where fraud_count > 0
+| project 
+    customer_name,
+    risk_category,
+    computed_risk_score,
+    fraud_count,
+    fraud_rate,
+    total_fraud_amount,
+    total_transactions,
+    cross_border_rate,
+    unique_countries
+| top 20 by computed_risk_score desc
+
+// =============================================================================
+// TILE 7: VELOCITY ALERTS — Rapid-fire transactions
+// =============================================================================
+VelocityDetection()
+| project 
+    timestamp,
+    transaction_id,
+    account_id,
+    customer_id,
+    amount,
+    time_diff_minutes,
+    high_velocity,
+    merchant_name,
+    channel
+| order by timestamp desc
+
+// =============================================================================
+// TILE 8: CROSS-BORDER FRAUD — Geographic risk map
+// =============================================================================
+CrossBorderFraud()
+| where risk_level in ('Critical', 'High')
+| summarize 
+    TxnCount = count(),
+    TotalAmount = round(sum(amount), 2),
+    AvgAmount = round(avg(amount), 2)
+    by customer_country, merchant_country, risk_level
+| order by TotalAmount desc
+| render columnchart with (title="Cross-Border Fraud by Country Pair")
+
+// =============================================================================
+// TILE 9: AMOUNT ANOMALIES — Unusual spending patterns
+// =============================================================================
+AmountAnomalyDetection()
+| project
+    timestamp,
+    customer_name,
+    amount,
+    avg_amount,
+    deviation_ratio,
+    merchant_name,
+    merchant_category,
+    customer_risk_score
+| top 20 by deviation_ratio desc
+
+// =============================================================================
+// TILE 10: IMPOSSIBLE TRAVEL — Geographic velocity check
+// =============================================================================
+GeographicVelocityCheck()
+| project
+    timestamp,
+    customer_name,
+    from_country,
+    to_country,
+    time_gap_hours,
+    amount,
+    merchant_name,
+    severity
+| order by severity, time_gap_hours asc
+
+// =============================================================================
+// TILE 11: MULTI-CHANNEL SWITCHING — Account compromise indicator
+// =============================================================================
+MultiChannelSwitching()
+| project
+    timestamp,
+    customer_name,
+    channel_switches,
+    channels_used,
+    total_amount,
+    severity
+| order by severity desc, channel_switches desc
+
+// =============================================================================
+// TILE 12: UNUSUAL TIME ACTIVITY — Late night / early morning
+// =============================================================================
+UnusualTimeDetection()
+| summarize 
+    TxnCount = count(),
+    TotalAmount = round(sum(amount), 2)
+    by hour, channel
+| order by hour asc
+| render columnchart with (title="Unusual Time Transactions by Hour & Channel")
+
+// =============================================================================
+// TILE 13: ACCOUNT TAKEOVER DETECTION — High-severity
+// =============================================================================
+AccountTakeoverDetection()
+| project
+    timestamp,
+    customer_name,
+    account_id,
+    account_type,
+    transaction_count,
+    unique_locations,
+    total_amount,
+    threat_level
+| order by threat_level, transaction_count desc
+
+// =============================================================================
+// TILE 14: MERCHANT RISK PROFILE — From materialized view
+// =============================================================================
+mv_MerchantRiskProfile
+| summarize 
+    TotalTxns = sum(TxnCount),
+    TotalAmount = round(sum(TotalAmount), 2),
+    HighRiskCustomerPct = round(100.0 * sum(HighRiskCustomerTxns) / sum(TxnCount), 2)
+    by merchant_category, merchant_risk_level
+| order by TotalAmount desc
+| render columnchart with (title="Transaction Volume by Merchant Category & Risk")
+
+// =============================================================================
+// TILE 15: HOURLY TRANSACTION VOLUME — From materialized view (Timechart)
+// =============================================================================
+mv_HourlyTransactionStats
+| summarize 
+    TotalTxns = sum(TxnCount),
+    TotalAmount = round(sum(TotalAmount), 2),
+    CrossBorder = sum(CrossBorderCount),
+    HighRisk = sum(HighRiskMerchantCount)
+    by timestamp
+| order by timestamp asc
+| render timechart with (title="Hourly Transaction Volume & Risk Indicators")

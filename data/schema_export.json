@@ -1,0 +1,136 @@
+{
+  "materializedViews": {
+    "mv_MerchantRiskProfile": {
+      "Query": "Transactions | summarize TxnCount=count(), TotalAmount=sum(amount), AvgAmount=avg(amount), UniqueCustomers=dcount(customer_id), HighRiskCustomerTxns=countif(customer_risk_score > 75), NightTxns=countif(datetime_part('hour', timestamp) >= 0 and datetime_part('hour', timestamp) <= 6), CardNotPresentTxns=countif(card_present == false) by merchant_id, merchant_name, merchant_category, merchant_country, merchant_risk_level",
+      "Enabled": 1,
+      "Source": "Transactions"
+    },
+    "mv_HourlyTransactionStats": {
+      "Query": "Transactions | summarize TxnCount=count(), TotalAmount=sum(amount), AvgAmount=avg(amount), MaxAmount=max(amount), CrossBorderCount=countif(customer_country != merchant_country), HighRiskMerchantCount=countif(merchant_risk_level == 'High'), CardNotPresentCount=countif(card_present == false) by bin(timestamp, 1h), transaction_type, channel",
+      "Enabled": 1,
+      "Source": "Transactions"
+    },
+    "mv_CustomerDailyRisk": {
+      "Query": "Transactions | summarize DailyTxnCount=count(), DailyAmount=sum(amount), DailyAvg=avg(amount), DailyMax=max(amount), UniqueCountries=dcount(merchant_country), UniqueMerchants=dcount(merchant_id), NightTxns=countif(datetime_part('hour', timestamp) >= 0 and datetime_part('hour', timestamp) <= 6), HighAmountTxns=countif(amount > 1000), CrossBorderTxns=countif(customer_country != merchant_country) by customer_id, bin(timestamp, 1d)",
+      "Enabled": 1,
+      "Source": "Transactions"
+    }
+  },
+  "functions": {
+    "VelocityDetection": {
+      "Body": "{\r\n    Transactions\r\n    | order by account_id, timestamp asc\r\n    | extend prev_timestamp = prev(timestamp, 1) \r\n    | extend prev_account = prev(account_id, 1)\r\n    | extend time_diff_minutes = datetime_diff('minute', timestamp, prev_timestamp)\r\n    | where account_id == prev_account\r\n    | extend velocity_flag = time_diff_minutes < 5  // Less than 5 min between txns\r\n    | extend high_velocity = time_diff_minutes < 1  // Less than 1 min (critical)\r\n    | where velocity_flag == true\r\n    | project \r\n        timestamp, \r\n        transaction_id, \r\n        account_id, \r\n        customer_id,\r\n        amount, \r\n        time_diff_minutes,\r\n        high_velocity,\r\n        merchant_name,\r\n        merchant_category,\r\n        channel\r\n}",
+      "Doc": "",
+      "Folder": "",
+      "Params": "()"
+    },
+    "FraudInvestigator": {
+      "Body": "{\n    let cust_info = Customers | where customer_id == target_customer_id;\n    let cust_accounts = BankAccounts | where customer_id == target_customer_id;\n    let cust_txns = Transactions | where customer_id == target_customer_id | order by timestamp desc;\n    let fraud_flags = FraudDetection() | where customer_id == target_customer_id and is_fraudulent == true;\n    let velocity_flags = VelocityDetection() | where customer_id == target_customer_id;\n    let risk_profile = CustomerRiskProfile() | where customer_id == target_customer_id;\n    union\n        (cust_info | extend section = 'Customer Info' | project section, key = 'Name', value = customer_name),\n        (cust_info | extend section = 'Customer Info' | project section, key = 'Email', value = email),\n        (cust_info | extend section = 'Customer Info' | project section, key = 'Risk Score', value = tostring(customer_risk_score)),\n        (cust_info | extend section = 'Customer Info' | project section, key = 'City', value = city),\n        (cust_info | extend section = 'Customer Info' | project section, key = 'Country', value = country),\n        (risk_profile | extend section = 'Risk Profile' | project section, key = 'Computed Risk', value = tostring(computed_risk_score)),\n        (risk_profile | extend section = 'Risk Profile' | project section, key = 'Risk Category', value = risk_category),\n        (risk_profile | extend section = 'Risk Profile' | project section, key = 'Fraud Rate %', value = tostring(fraud_rate)),\n        (risk_profile | extend section = 'Risk Profile' | project section, key = 'Total Txns', value = tostring(total_transactions)),\n        (risk_profile | extend section = 'Risk Profile' | project section, key = 'Fraud Count', value = tostring(fraud_count))\n}",
+      "Doc": "Comprehensive fraud investigation for a specific customer",
+      "Folder": "Investigation",
+      "Params": "(target_customer_id:string)"
+    },
+    "GeographicVelocityCheck": {
+      "Body": "{\n    Transactions\n    | order by customer_id, timestamp asc\n    | extend prev_country = prev(merchant_country, 1), prev_customer = prev(customer_id, 1), prev_timestamp = prev(timestamp, 1)\n    | where customer_id == prev_customer\n    | where merchant_country != prev_country\n    | extend time_gap_hours = datetime_diff('hour', timestamp, prev_timestamp)\n    | where time_gap_hours < 4\n    | join kind=inner (Customers) on customer_id\n    | project\n        timestamp,\n        transaction_id,\n        customer_id,\n        customer_name,\n        email,\n        from_country = prev_country,\n        to_country = merchant_country,\n        time_gap_hours,\n        amount,\n        merchant_name,\n        channel,\n        customer_risk_score,\n        severity = case(time_gap_hours < 1, 'Critical', time_gap_hours < 2, 'High', 'Medium')\n    | order by time_gap_hours asc\n}",
+      "Doc": "Impossible travel detection - transactions from distant countries within short timeframes",
+      "Folder": "FraudDetection",
+      "Params": "()"
+    },
+    "Customers_View": {
+      "Body": "{\n    AllBankingData\n    | where entity_type == \"Customer\"\n    | project customer_id, customer_name, email, phone, address, city, state, \n              country, postal_code, account_creation_date, customer_risk_score, \n              is_high_risk_customer, ingestion_timestamp\n}",
+      "Doc": "",
+      "Folder": "",
+      "Params": "()"
+    },
+    "RealTimeFraudDashboard": {
+      "Body": "{\n    let fraud_alerts = FraudDetection() | where is_fraudulent == true;\n    let velocity_alerts = VelocityDetection();\n    let crossborder_alerts = CrossBorderFraud() | where risk_level == 'Critical';\n    let amount_anomalies = AmountAnomalyDetection();\n    let unusual_time = UnusualTimeDetection();\n    let account_takeover = AccountTakeoverDetection();\n    union\n        (fraud_alerts | extend detection_type = 'Fraud Score', severity = case(fraud_score >= 90, 'Critical', fraud_score >= 70, 'High', 'Medium') | project timestamp, transaction_id, customer_id, amount, detection_type, severity, details = strcat('Score: ', tostring(fraud_score), ' | Type: ', fraud_type)),\n        (velocity_alerts | extend detection_type = 'Velocity', severity = case(high_velocity, 'Critical', 'High') | project timestamp, transaction_id, customer_id, amount, detection_type, severity, details = strcat('Gap: ', tostring(time_diff_minutes), 'min | Merchant: ', merchant_name)),\n        (crossborder_alerts | extend detection_type = 'Cross-Border', severity = risk_level | project timestamp, transaction_id, customer_id = customer_name, amount, detection_type, severity, details = strcat(customer_country, ' -> ', merchant_country, ' | ', merchant_name)),\n        (amount_anomalies | extend detection_type = 'Amount Anomaly', severity = case(deviation_ratio > 10, 'Critical', 'High') | project timestamp, transaction_id, customer_id = customer_name, amount, detection_type, severity, details = strcat('Deviation: ', tostring(deviation_ratio), 'x avg | Avg: $', tostring(avg_amount))),\n        (account_takeover | extend detection_type = 'Account Takeover', severity = threat_level | project timestamp, transaction_id = account_id, customer_id = customer_name, amount = total_amount, detection_type, severity, details = strcat('Txns: ', tostring(transaction_count), ' | Countries: ', tostring(unique_locations)))\n    | order by timestamp desc\n}",
+      "Doc": "Real-time fraud dashboard summary using all detection functions",
+      "Folder": "Dashboard",
+      "Params": "()"
+    },
+    "FraudDetection": {
+      "Body": "{\r\n    Transactions\r\n    | extend hour_of_day = datetime_part('hour', timestamp)\r\n    // Rule 1: Unusual Time (2 AM - 5 AM)\r\n    | extend unusual_time = hour_of_day >= 2 and hour_of_day <= 5\r\n    // Rule 2: Geographic Anomaly (customer and merchant in different countries)\r\n    | extend unusual_location = customer_country != merchant_country\r\n    // Rule 3: High Amount Flag (>$2000)\r\n    | extend amount_flag = amount > 2000\r\n    // Rule 4: High-risk merchant\r\n    | extend high_risk_merchant = merchant_risk_level == \"High\"\r\n    // Rule 5: High-risk customer\r\n    | extend high_risk_customer = customer_risk_score > 75\r\n    // Rule 6: Card not present for high amounts\r\n    | extend card_not_present_risk = (card_present == false and amount > 500)\r\n    // Calculate fraud score\r\n    | extend fraud_score = \r\n        case(unusual_time, 15, 0) +\r\n        case(unusual_location, 20, 0) +\r\n        case(amount_flag, 25, 0) +\r\n        case(high_risk_merchant, 10, 0) +\r\n        case(high_risk_customer, 15, 0) +\r\n        case(card_not_present_risk, 20, 0)\r\n    // Determine if fraudulent (score > 70)\r\n    | extend is_fraudulent = fraud_score > 70\r\n    // Classify fraud type\r\n    | extend fraud_type = case(\r\n        is_fraudulent and amount_flag, \"Amount Anomaly\",\r\n        is_fraudulent and unusual_location, \"Geographic Anomaly\",\r\n        is_fraudulent and card_not_present_risk, \"Card Not Present Fraud\",\r\n        is_fraudulent and unusual_time, \"Unusual Time Activity\",\r\n        is_fraudulent, \"Multi-Factor Suspicious\",\r\n        \"Normal\"\r\n    )\r\n}",
+      "Doc": "",
+      "Folder": "",
+      "Params": "()"
+    },
+    "AccountTakeoverDetection": {
+      "Body": "{\n    Transactions\n    | summarize \n        transaction_count = count(),\n        unique_locations = dcount(merchant_country),\n        unique_merchants = dcount(merchant_id),\n        unusual_time_count = countif(datetime_part('hour', timestamp) >= 0 and datetime_part('hour', timestamp) <= 6),\n        high_amount_count = countif(amount > 1000),\n        total_amount = sum(amount)\n        by account_id, bin(timestamp, 1h)  // 1-hour windows\n    | where transaction_count > 10  // More than 10 txns in 1 hour\n        or unique_locations > 3  // From 3+ countries in 1 hour\n        or (unusual_time_count > 3 and high_amount_count > 2)  // Multiple late-night high-value txns\n    | join kind=inner (BankAccounts) on account_id\n    | join kind=inner (Customers) on customer_id\n    | project \n        timestamp,\n        account_id,\n        customer_name,\n        email,\n        phone,\n        account_type,\n        transaction_count,\n        unique_locations,\n        unique_merchants,\n        unusual_time_count,\n        high_amount_count,\n        total_amount = round(total_amount, 2),\n        threat_level = case(\n            unique_locations > 3 and high_amount_count > 2, \"Critical\",\n            transaction_count > 15, \"High\",\n            \"Medium\"\n        )\n    | order by threat_level, transaction_count desc\n}",
+      "Doc": "",
+      "Folder": "",
+      "Params": "()"
+    },
+    "FraudSummaryKPIs": {
+      "Body": "{\n    let total_txns = Transactions | count | project TotalTransactions = Count;\n    let fraud_txns = FraudDetection() | where is_fraudulent == true | summarize FraudCount = count(), FraudAmount = sum(amount);\n    let high_risk_customers = Customers | where customer_risk_score > 75 | count | project HighRiskCustomers = Count;\n    let active_alerts = FraudAlerts | summarize ActiveAlerts = count();\n    let velocity_alerts = VelocityDetection() | summarize VelocityAlerts = count();\n    let cross_border = CrossBorderFraud() | where risk_level == 'Critical' | summarize CriticalCrossBorder = count();\n    total_txns | extend dummy = 1\n    | join kind=inner (fraud_txns | extend dummy = 1) on dummy\n    | join kind=inner (high_risk_customers | extend dummy = 1) on dummy\n    | join kind=inner (active_alerts | extend dummy = 1) on dummy\n    | join kind=inner (velocity_alerts | extend dummy = 1) on dummy\n    | join kind=inner (cross_border | extend dummy = 1) on dummy\n    | project\n        TotalTransactions,\n        FraudCount,\n        FraudRate = round(100.0 * FraudCount / TotalTransactions, 2),\n        FraudAmount = round(FraudAmount, 2),\n        HighRiskCustomers,\n        ActiveAlerts,\n        VelocityAlerts,\n        CriticalCrossBorder\n}",
+      "Doc": "Key fraud KPIs for dashboard tiles",
+      "Folder": "Dashboard",
+      "Params": "()"
+    },
+    "CustomerRiskProfile": {
+      "Body": "{\r\n    let fraud_txns = FraudDetection()\r\n    | where is_fraudulent == true\r\n    | summarize fraud_count = count(), total_fraud_amount = sum(amount) by customer_id;\r\n    \r\n    Transactions\r\n    | summarize \r\n        total_transactions = count(),\r\n        total_amount = sum(amount),\r\n        avg_amount = avg(amount),\r\n        max_amount = max(amount),\r\n        unique_merchants = dcount(merchant_id),\r\n        unique_countries = dcount(merchant_country),\r\n        cross_border_txns = countif(customer_country != merchant_country),\r\n        high_amount_txns = countif(amount > 1000),\r\n        unusual_time_txns = countif(datetime_part('hour', timestamp) >= 0 and datetime_part('hour', timestamp) <= 6),\r\n        card_not_present_txns = countif(card_present == false)\r\n        by customer_id\r\n    | join kind=leftouter (fraud_txns) on customer_id\r\n    | join kind=inner (Customers) on customer_id\r\n    | extend \r\n        fraud_count = coalesce(fraud_count, 0),\r\n        total_fraud_amount = coalesce(total_fraud_amount, 0.0)\r\n    | extend \r\n        fraud_rate = round(100.0 * fraud_count / total_transactions, 2),\r\n        cross_border_rate = round(100.0 * cross_border_txns / total_transactions, 2),\r\n        high_amount_rate = round(100.0 * high_amount_txns / total_transactions, 2)\r\n    // Calculate composite risk score (0-100)\r\n    | extend computed_risk_score = \r\n        (fraud_rate * 0.4) +  // 40% weight to fraud rate\r\n        (cross_border_rate * 0.2) +  // 20% weight to cross-border\r\n        (high_amount_rate * 0.15) +  // 15% weight to high amounts\r\n        (customer_risk_score * 0.25)  // 25% weight to original risk score\r\n    | extend risk_category = case(\r\n        computed_risk_score >= 75, \"Critical\",\r\n        computed_risk_score >= 50, \"High\",\r\n        computed_risk_score >= 25, \"Medium\",\r\n        \"Low\"\r\n    )\r\n    | project \r\n        customer_id,\r\n        customer_name,\r\n        email,\r\n        phone,\r\n        city,\r\n        state,\r\n        country,\r\n        original_risk_score = customer_risk_score,\r\n        computed_risk_score = round(computed_risk_score, 2),\r\n        risk_category,\r\n        total_transactions,\r\n        fraud_count,\r\n        fraud_rate,\r\n        total_amount = round(total_amount, 2),\r\n        total_fraud_amount = round(total_fraud_amount, 2),\r\n        avg_amount = round(avg_amount, 2),\r\n        max_amount,\r\n        unique_merchants,\r\n        unique_countries,\r\n        cross_border_txns,\r\n        cross_border_rate,\r\n        high_amount_txns,\r\n        unusual_time_txns,\r\n        card_not_present_txns\r\n    | order by computed_risk_score desc\r\n}",
+      "Doc": "",
+      "Folder": "",
+      "Params": "()"
+    },
+    "MerchantCategoryAnomaly": {
+      "Body": "{\n    let customer_category_baseline = Transactions\n    | summarize baseline_amount = avg(amount), baseline_count = count() by customer_id, merchant_category;\n    Transactions\n    | summarize recent_amount = sum(amount), recent_count = count() by customer_id, merchant_category, bin(timestamp, 1d)\n    | join kind=inner (customer_category_baseline) on customer_id, merchant_category\n    | where recent_amount > (baseline_amount * 5) or recent_count > (baseline_count * 3)\n    | extend anomaly_ratio = round(recent_amount / baseline_amount, 2)\n    | join kind=inner (Customers) on customer_id\n    | project\n        timestamp,\n        customer_id,\n        customer_name,\n        email,\n        merchant_category,\n        recent_amount = round(recent_amount, 2),\n        baseline_amount = round(baseline_amount, 2),\n        anomaly_ratio,\n        recent_count,\n        baseline_count,\n        customer_risk_score,\n        severity = case(anomaly_ratio > 10, 'Critical', anomaly_ratio > 5, 'High', 'Medium')\n    | order by anomaly_ratio desc\n}",
+      "Doc": "Detect unusual merchant category spending patterns per customer",
+      "Folder": "FraudDetection",
+      "Params": "()"
+    },
+    "Merchants_View": {
+      "Body": "{\n    AllBankingData\n    | where entity_type == \"Merchant\"\n    | project merchant_id, merchant_name, merchant_category, merchant_country, \n              risk_level, ingestion_timestamp\n}",
+      "Doc": "",
+      "Folder": "",
+      "Params": "()"
+    },
+    "CrossBorderFraud": {
+      "Body": "{\r\n    Transactions\r\n    | where customer_country != merchant_country\r\n    | where amount > 100  // Focus on significant amounts\r\n    | join kind=inner (Customers) on customer_id\r\n    | project \r\n        timestamp,\r\n        transaction_id,\r\n        customer_name,\r\n        customer_country,\r\n        merchant_name,\r\n        merchant_country,\r\n        amount,\r\n        currency,\r\n        channel,\r\n        customer_risk_score,\r\n        merchant_risk_level\r\n    | extend risk_level = case(\r\n        amount > 1000 and merchant_risk_level == \"High\", \"Critical\",\r\n        amount > 500, \"High\",\r\n        \"Medium\"\r\n    )\r\n    | order by amount desc\r\n}",
+      "Doc": "",
+      "Folder": "",
+      "Params": "()"
+    },
+    "AmountAnomalyDetection": {
+      "Body": "{\r\n    let customer_avg = Transactions\r\n    | summarize \r\n        avg_amount = avg(amount),\r\n        max_amount = max(amount),\r\n        total_transactions = count()\r\n        by customer_id;\r\n    Transactions\r\n    | join kind=inner (customer_avg) on customer_id\r\n    | extend deviation_ratio = amount / avg_amount\r\n    | where deviation_ratio > 5  // Transaction is 5x higher than average\r\n    | join kind=inner (Customers) on customer_id\r\n    | project \r\n        timestamp,\r\n        transaction_id,\r\n        customer_name,\r\n        email,\r\n        amount,\r\n        avg_amount = round(avg_amount, 2),\r\n        deviation_ratio = round(deviation_ratio, 2),\r\n        merchant_name,\r\n        merchant_category,\r\n        total_transactions,\r\n        customer_risk_score\r\n    | order by deviation_ratio desc\r\n}",
+      "Doc": "",
+      "Folder": "",
+      "Params": "()"
+    },
+    "FraudAlertTransform": {
+      "Body": "{\n    FraudDetection()\n    | where is_fraudulent == true\n    | extend alert_id = strcat('ALERT-', transaction_id)\n    | extend alert_timestamp = now()\n    | extend alert_status = 'New'\n    | project \n        alert_id,\n        transaction_id,\n        timestamp,\n        customer_id,\n        account_id,\n        merchant_id,\n        merchant_name,\n        amount,\n        fraud_score,\n        fraud_type,\n        is_fraudulent,\n        unusual_time,\n        unusual_location,\n        amount_flag,\n        high_risk_merchant,\n        high_risk_customer,\n        card_not_present_risk,\n        channel,\n        merchant_country,\n        customer_country,\n        alert_timestamp,\n        alert_status\n}",
+      "Doc": "Transform detected fraud into alerts using FraudDetection function",
+      "Folder": "FraudPipeline",
+      "Params": "()"
+    },
+    "UnusualTimeDetection": {
+      "Body": "{\r\n    Transactions\r\n    | extend hour = datetime_part('hour', timestamp)\r\n    | extend day_of_week = dayofweek(timestamp)\r\n    // Flag unusual times: 12 AM - 6 AM\r\n    | where hour >= 0 and hour <= 6\r\n    | where amount > 200  // Focus on significant amounts\r\n    | join kind=inner (Customers) on customer_id\r\n    | join kind=inner (BankAccounts) on account_id\r\n    | project \r\n        timestamp,\r\n        hour,\r\n        day_of_week,\r\n        transaction_id,\r\n        customer_name,\r\n        email,\r\n        phone,\r\n        amount,\r\n        merchant_name,\r\n        merchant_category,\r\n        channel,\r\n        account_type,\r\n        customer_risk_score\r\n    | order by timestamp desc\r\n}",
+      "Doc": "",
+      "Folder": "",
+      "Params": "()"
+    },
+    "Transactions_View": {
+      "Body": "{\n    AllBankingData\n    | where entity_type == \"Transaction\"\n    | project transaction_id, timestamp, account_id, customer_id, merchant_id, \n              merchant_name, merchant_category, amount, currency, transaction_type, \n              channel, card_present, merchant_country, customer_city, customer_country, \n              customer_risk_score, merchant_risk_level, ingestion_timestamp\n}",
+      "Doc": "",
+      "Folder": "",
+      "Params": "()"
+    },
+    "BankAccounts_View": {
+      "Body": "{\n    AllBankingData\n    | where entity_type == \"BankAccount\"\n    | project account_id, customer_id, account_type, account_status, opening_date, \n              current_balance, credit_limit, daily_transaction_limit, ingestion_timestamp\n}",
+      "Doc": "",
+      "Folder": "",
+      "Params": "()"
+    },
+    "MultiChannelSwitching": {
+      "Body": "{\n    Transactions\n    | order by customer_id, timestamp asc\n    | extend prev_channel = prev(channel, 1), prev_customer = prev(customer_id, 1), prev_timestamp = prev(timestamp, 1)\n    | where customer_id == prev_customer\n    | where channel != prev_channel\n    | extend switch_gap_minutes = datetime_diff('minute', timestamp, prev_timestamp)\n    | where switch_gap_minutes < 30\n    | summarize \n        channel_switches = count(),\n        channels_used = make_set(channel),\n        total_amount = sum(amount),\n        first_switch = min(timestamp),\n        last_switch = max(timestamp)\n        by customer_id, bin(timestamp, 1h)\n    | where channel_switches >= 3\n    | join kind=inner (Customers) on customer_id\n    | project\n        timestamp,\n        customer_id,\n        customer_name,\n        email,\n        phone,\n        channel_switches,\n        channels_used,\n        total_amount = round(total_amount, 2),\n        first_switch,\n        last_switch,\n        customer_risk_score,\n        severity = case(channel_switches >= 5, 'Critical', channel_switches >= 3, 'High', 'Medium')\n    | order by channel_switches desc\n}",
+      "Doc": "Detect rapid channel switching - indicator of account compromise",
+      "Folder": "FraudDetection",
+      "Params": "()"
+    }
+  },
+  "tables": {
+    "Customers": "customer_id:string,customer_name:string,email:string,phone:string,address:string,city:string,state:string,country:string,postal_code:string,account_creation_date:datetime,customer_risk_score:int,is_high_risk_customer:bool,entity_type:string,ingestion_timestamp:datetime",
+    "Merchants": "merchant_id:string,merchant_name:string,merchant_category:string,merchant_country:string,risk_level:string,entity_type:string,ingestion_timestamp:datetime",
+    "BankAccounts": "account_id:string,customer_id:string,account_type:string,account_status:string,opening_date:datetime,current_balance:real,credit_limit:real,daily_transaction_limit:real,entity_type:string,ingestion_timestamp:datetime",
+    "FraudAlerts": "alert_id:string,transaction_id:string,timestamp:datetime,customer_id:string,account_id:string,merchant_id:string,merchant_name:string,amount:real,fraud_score:long,fraud_type:string,is_fraudulent:bool,unusual_time:bool,unusual_location:bool,amount_flag:bool,high_risk_merchant:bool,high_risk_customer:bool,card_not_present_risk:bool,channel:string,merchant_country:string,customer_country:string,alert_timestamp:datetime,alert_status:string",
+    "Transactions": "transaction_id:string,timestamp:datetime,account_id:string,customer_id:string,merchant_id:string,merchant_name:string,merchant_category:string,amount:real,currency:string,transaction_type:string,channel:string,card_present:bool,merchant_country:string,customer_city:string,customer_country:string,customer_risk_score:int,merchant_risk_level:string,entity_type:string,ingestion_timestamp:datetime"
+  }
+}

@@ -1,0 +1,18 @@
+// ============================================================================
+// Table: BankAccounts
+// Description: Bank account details linked to customers, including account
+//              type, status, balances, and transaction limits.
+// ============================================================================
+
+.create-merge table BankAccounts (
+    account_id: string,
+    customer_id: string,
+    account_type: string,
+    account_status: string,
+    opening_date: datetime,
+    current_balance: real,
+    credit_limit: real,
+    daily_transaction_limit: real,
+    entity_type: string,
+    ingestion_timestamp: datetime
+)

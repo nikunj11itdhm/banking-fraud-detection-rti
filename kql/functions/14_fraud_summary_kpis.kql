@@ -1,0 +1,31 @@
+// ============================================================================
+// Function: FraudSummaryKPIs
+// Description: Key fraud KPIs for dashboard tiles. Produces a single-row
+//              summary with total transactions, fraud counts, fraud rate,
+//              high-risk customers, active alerts, and critical detections.
+// ============================================================================
+
+.create-or-alter function with (docstring = "Key fraud KPIs for dashboard tiles", folder = "Dashboard") FraudSummaryKPIs()
+{
+    let total_txns = Transactions | count | project TotalTransactions = Count;
+    let fraud_txns = FraudDetection() | where is_fraudulent == true | summarize FraudCount = count(), FraudAmount = sum(amount);
+    let high_risk_customers = Customers | where customer_risk_score > 75 | count | project HighRiskCustomers = Count;
+    let active_alerts = FraudAlerts | summarize ActiveAlerts = count();
+    let velocity_alerts = VelocityDetection() | summarize VelocityAlerts = count();
+    let cross_border = CrossBorderFraud() | where risk_level == 'Critical' | summarize CriticalCrossBorder = count();
+    total_txns | extend dummy = 1
+    | join kind=inner (fraud_txns | extend dummy = 1) on dummy
+    | join kind=inner (high_risk_customers | extend dummy = 1) on dummy
+    | join kind=inner (active_alerts | extend dummy = 1) on dummy
+    | join kind=inner (velocity_alerts | extend dummy = 1) on dummy
+    | join kind=inner (cross_border | extend dummy = 1) on dummy
+    | project
+        TotalTransactions,
+        FraudCount,
+        FraudRate = round(100.0 * FraudCount / TotalTransactions, 2),
+        FraudAmount = round(FraudAmount, 2),
+        HighRiskCustomers,
+        ActiveAlerts,
+        VelocityAlerts,
+        CriticalCrossBorder
+}

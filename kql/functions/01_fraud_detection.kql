@@ -1,0 +1,43 @@
+// ============================================================================
+// Function: FraudDetection
+// Description: Multi-rule fraud scoring engine that evaluates transactions
+//              against time, geography, amount, merchant, and customer risk
+//              rules to produce a composite fraud score and classification.
+// ============================================================================
+
+.create-or-alter function with (docstring = "", folder = "") FraudDetection()
+{
+    Transactions
+    | extend hour_of_day = datetime_part('hour', timestamp)
+    // Rule 1: Unusual Time (2 AM - 5 AM)
+    | extend unusual_time = hour_of_day >= 2 and hour_of_day <= 5
+    // Rule 2: Geographic Anomaly (customer and merchant in different countries)
+    | extend unusual_location = customer_country != merchant_country
+    // Rule 3: High Amount Flag (>$2000)
+    | extend amount_flag = amount > 2000
+    // Rule 4: High-risk merchant
+    | extend high_risk_merchant = merchant_risk_level == "High"
+    // Rule 5: High-risk customer
+    | extend high_risk_customer = customer_risk_score > 75
+    // Rule 6: Card not present for high amounts
+    | extend card_not_present_risk = (card_present == false and amount > 500)
+    // Calculate fraud score
+    | extend fraud_score = 
+        case(unusual_time, 15, 0) +
+        case(unusual_location, 20, 0) +
+        case(amount_flag, 25, 0) +
+        case(high_risk_merchant, 10, 0) +
+        case(high_risk_customer, 15, 0) +
+        case(card_not_present_risk, 20, 0)
+    // Determine if fraudulent (score > 70)
+    | extend is_fraudulent = fraud_score > 70
+    // Classify fraud type
+    | extend fraud_type = case(
+        is_fraudulent and amount_flag, "Amount Anomaly",
+        is_fraudulent and unusual_location, "Geographic Anomaly",
+        is_fraudulent and card_not_present_risk, "Card Not Present Fraud",
+        is_fraudulent and unusual_time, "Unusual Time Activity",
+        is_fraudulent, "Multi-Factor Suspicious",
+        "Normal"
+    )
+}

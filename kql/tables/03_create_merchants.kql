@@ -1,0 +1,15 @@
+// ============================================================================
+// Table: Merchants
+// Description: Merchant reference data including category classification,
+//              geographic location, and assigned risk level.
+// ============================================================================
+
+.create-merge table Merchants (
+    merchant_id: string,
+    merchant_name: string,
+    merchant_category: string,
+    merchant_country: string,
+    risk_level: string,
+    entity_type: string,
+    ingestion_timestamp: datetime
+)

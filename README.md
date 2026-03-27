@@ -399,6 +399,32 @@ FraudDetection()
 
 > 💡 **Tip:** Set the dashboard auto-refresh interval to **30 seconds** for near-real-time updates.
 
+#### 📸 Dashboard Screenshots
+
+**Page 1 — Fraud Command Center (KPIs & Overview)**
+
+![Fraud Command Center](images/RTI%20Dashboard%201.png)
+
+*KPI cards (Total Transactions, Fraud Count, Fraud Rate, Fraud Amount, Active Alerts, Velocity Alerts), Fraud Detections Over Time trend chart, and Fraud Types distribution.*
+
+**Page 2 — Detection Details (Alert Feed & Risk Analysis)**
+
+![Detection Details](images/RTI%20Dashboard%202.png)
+
+*Real-Time Alert Feed with severity-coded rows, Fraud Detection by Channel funnel chart, and Top Risk Customers table with computed risk scores.*
+
+**Page 3 — Investigation (Velocity, Cross-Border & Anomalies)**
+
+![Investigation](images/RTI%20Dashboard%203.png)
+
+*Velocity Alerts table (rapid-fire transactions), Cross-Border Fraud by country bar chart, and Amount Anomalies table showing deviation ratios up to 15x.*
+
+**Page 4 — Trends & Analytics (Volume, Night Activity & Takeover)**
+
+![Trends & Analytics](images/RTI%20Dashboard%204.png)
+
+*Hourly transaction volume time series, Night Activity breakdown by channel and hour, and Account Takeover detection panel.*
+
 ---
 
 ### Step 9: Create KQL Queryset
@@ -847,7 +873,11 @@ FraudDetection/
 ├── 📂 dashboard/                                   # Dashboard artifacts
 │   └── 📄 dashboard_queries.kql                    #   15-tile dashboard KQL queries
 │
-└── 📂 images/                                      # Screenshots (add manually)
+└── 📂 images/                                      # Dashboard screenshots
+    ├── RTI Dashboard 1.png                         #   Fraud Command Center (KPIs)
+    ├── RTI Dashboard 2.png                         #   Detection Details & Risk
+    ├── RTI Dashboard 3.png                         #   Velocity, Cross-Border, Anomalies
+    └── RTI Dashboard 4.png                         #   Trends & Analytics
 ```
 
 ---

@@ -401,29 +401,65 @@ FraudDetection()
 
 #### 📸 Dashboard Screenshots
 
+The real-time dashboard is organized into **3 pages** with auto-refresh enabled for live operational monitoring.
+
+---
+
 **Page 1 — Fraud Command Center (KPIs & Overview)**
 
 ![Fraud Command Center](images/RTI%20Dashboard%201.png)
 
-*KPI cards (Total Transactions, Fraud Count, Fraud Rate, Fraud Amount, Active Alerts, Velocity Alerts), Fraud Detections Over Time trend chart, and Fraud Types distribution.*
+The command center provides an at-a-glance operational summary:
+
+| KPI Card | Value | Description |
+|---|---|---|
+| **Total Transactions** | 10,000 | Total banking transactions monitored |
+| **Fraud Count** | 43 | Transactions flagged as fraudulent |
+| **Fraud Rate %** | 0.43 | Percentage of fraudulent transactions |
+| **Fraud Amount ($)** | 255,601 | Total dollar value of suspicious activity |
+| **Active Alerts** | 86 | Open fraud alerts pending investigation |
+| **Velocity Alerts** | 4 | Rapid-fire transaction pattern detections |
+
+- 📈 **Fraud Detections Over Time** — Time-series chart tracking FraudCount and TotalAmount trends from Feb 21 to Mar 22, showing daily fluctuations in fraud activity with peaks around Feb 26 (~10K) and periodic dips
+- 🥧 **Fraud Types** — Donut chart showing the distribution of fraud types; Amount Anomaly dominates at 100% of classified alerts, indicating most flagged transactions are high-value spending outliers
+
+---
 
 **Page 2 — Detection Details (Alert Feed & Risk Analysis)**
 
 ![Detection Details](images/RTI%20Dashboard%202.png)
 
-*Real-Time Alert Feed with severity-coded rows, Fraud Detection by Channel funnel chart, and Top Risk Customers table with computed risk scores.*
+The detection details page provides real-time operational visibility into active fraud:
+
+- 🔴 **Real-Time Alert Feed** (50 rows) — Live scrolling table of the latest fraud alerts with color-coded severity rows (red = High/Critical). Each row shows timestamp, transaction ID, customer name, amount, detection type (Amount Anomaly, Cross-Border, Fraud Score), severity level, and investigation details. Highest alert: Jason Jones — $9,598.71 Amount Anomaly
+- 📊 **Fraud Detection by Channel** — Stacked horizontal funnel chart breaking down fraud detections across ATM, POS, Online, and Mobile channels. ATM leads with 30,715 (89%), followed by POS at 20,172 (58.58%) and Online at 16,834 (48.89%). Each bar shows percentage penetration across detection types
+- 👥 **Top Risk Customers** (20 rows) — Ranked table of highest-risk customers with computed risk scores (max 56.17 — Brian Moore), risk category (High/Medium), fraud count, fraud rate %, total fraud amount, cross-border rate, and unique countries. Color-coded rows highlight High-risk customers in red/orange
+
+---
 
 **Page 3 — Investigation (Velocity, Cross-Border & Anomalies)**
 
 ![Investigation](images/RTI%20Dashboard%203.png)
 
-*Velocity Alerts table (rapid-fire transactions), Cross-Border Fraud by country bar chart, and Amount Anomalies table showing deviation ratios up to 15x.*
+Deep-dive investigation tools for fraud analysts:
+
+- ⚡ **Velocity Alerts** (4 rows) — Detects rapid-fire transactions from the same account within minutes. Example: CUST000671 made a $455.48 transaction at Computer Warehouse #55 just 3 minutes after a previous transaction. Shows timestamp, transaction ID, account, customer, amount, time difference (1–4 min), and merchant details
+- 🌍 **Cross-Border Fraud** — Bar chart showing international transaction volume by merchant country code. Colombia (CO) leads at ~40K, followed by Ecuador (EC) at ~25K and Tajikistan (TJ) at ~22K. Covers 20+ countries including MU, CI, NI, BT, TT, ME, NP, WS, CF, SO, MV, VU, NG, ZA, SM, UG — each colored by risk category
+- 💰 **Amount Anomalies** (20 rows) — Transactions where spending exceeds the customer's historical average by extreme ratios. Top anomaly: Kathryn Dunn spent $8,093.61 at Phone Hub #360 — **15.25x** her average of $530.64. Table shows deviation ratios ranging from 12.72x to 15.25x, all flagging potential card compromise or account takeover
+
+---
 
 **Page 4 — Trends & Analytics (Volume, Night Activity & Takeover)**
 
 ![Trends & Analytics](images/RTI%20Dashboard%204.png)
 
-*Hourly transaction volume time series, Night Activity breakdown by channel and hour, and Account Takeover detection panel.*
+Historical trend analysis and behavioral pattern detection:
+
+- 📈 **Hourly Volume** — High-frequency time-series chart (Feb 20 – Mar 22) showing transaction volume spikes up to 30K per hour with four overlay series: CrossBorder (blue), HighRisk (orange), TotalAmount (dark blue), and TotalTxns (purple). The spiky pattern reveals natural daily transaction cycles with clear daytime peaks and overnight troughs
+- 🌙 **Night Activity** (28 rows) — Hourly breakdown of transactions during suspicious hours (12AM–6AM) across all channels. Hour 0 shows: Online (68 txns, $39,650), ATM (66, $44,785), Mobile (64, $57,278), POS (76, $62,239). Useful for identifying unusual after-hours banking patterns that may indicate unauthorized access
+- 🔐 **Account Takeover** — Detection panel for accounts showing 10+ transactions/hour or activity from 3+ countries within 1 hour. Currently shows "No Rows To Show" — indicating no active account takeover attempts detected in the monitoring window. This is a good sign for the current data window
+
+> 🔄 **Dashboard pages** — Use the left sidebar to navigate between *Fraud Command Center*, *Detection Details*, and *Trends & Analytics*. The time range filter (top-left: "Last 90 days") applies globally across all pages.
 
 ---
 

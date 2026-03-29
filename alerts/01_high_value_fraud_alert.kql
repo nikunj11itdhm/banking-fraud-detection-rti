@@ -1,0 +1,34 @@
+// ============================================================
+// ALERT 1: High-Value Fraud Detection Alert
+// Trigger: Any transaction flagged as fraud with amount > $2,000
+// Notification: Email + Teams
+// Frequency: Real-time (every 5 minutes)
+// ============================================================
+FraudDetection()
+| where is_fraudulent == true and amount > 2000
+| where timestamp > ago(5m)
+| project 
+    AlertTime = now(),
+    TransactionID = transaction_id,
+    CustomerID = customer_id,
+    MerchantName = merchant_name,
+    Amount = amount,
+    FraudScore = fraud_score,
+    FraudType = fraud_type,
+    Channel = channel,
+    MerchantCountry = merchant_country,
+    CustomerCountry = customer_country,
+    Severity = case(
+        fraud_score > 4, "🔴 CRITICAL",
+        fraud_score > 3, "🟠 HIGH",
+        fraud_score > 2, "🟡 MEDIUM",
+        "🟢 LOW"
+    ),
+    AlertMessage = strcat(
+        "⚠️ FRAUD ALERT: $", tostring(round(amount, 2)),
+        " transaction by ", customer_id,
+        " at ", merchant_name,
+        " (Score: ", tostring(fraud_score), "/6)",
+        " via ", channel
+    )
+| order by FraudScore desc

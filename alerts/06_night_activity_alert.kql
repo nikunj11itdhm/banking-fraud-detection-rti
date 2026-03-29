@@ -1,0 +1,30 @@
+// ============================================================
+// ALERT 6: Night-Time Activity Alert
+// Trigger: Transactions between 12AM-5AM local time
+// Notification: Email (digest)
+// Frequency: Every 30 minutes
+// ============================================================
+UnusualTimeDetection()
+| where timestamp > ago(30m)
+| where hour_of_day between (0 .. 5)
+| project
+    AlertTime = now(),
+    TransactionID = transaction_id,
+    CustomerID = customer_id,
+    MerchantName = merchant_name,
+    Amount = amount,
+    HourOfDay = hour_of_day,
+    Channel = channel,
+    Severity = case(
+        amount > 1000, "🟠 HIGH",
+        "🟡 MEDIUM"
+    ),
+    AlertMessage = strcat(
+        "🌙 NIGHT ACTIVITY: ", customer_id,
+        " — $", tostring(round(amount, 2)),
+        " at ", merchant_name,
+        " at ", tostring(hour_of_day), ":00",
+        " via ", channel,
+        " — After-hours transaction detected"
+    )
+| order by Amount desc

@@ -1,0 +1,25 @@
+// ============================================================
+// ALERT 2: Velocity Attack Alert
+// Trigger: Multiple transactions from same account within 5 min
+// Notification: Email + Teams (URGENT)
+// Frequency: Real-time (every 2 minutes)
+// ============================================================
+VelocityDetection()
+| where timestamp > ago(5m)
+| project
+    AlertTime = now(),
+    TransactionID = transaction_id,
+    CustomerID = customer_id,
+    AccountID = account_id,
+    MerchantName = merchant_name,
+    Amount = amount,
+    TimeDiffMinutes = time_diff_minutes,
+    Severity = "🔴 CRITICAL",
+    AlertMessage = strcat(
+        "🚨 VELOCITY ATTACK: ", customer_id,
+        " made transaction at ", merchant_name,
+        " ($", tostring(round(amount, 2)), ")",
+        " only ", tostring(round(time_diff_minutes, 1)), " min after previous txn",
+        " — Possible automated fraud attack!"
+    )
+| order by TimeDiffMinutes asc

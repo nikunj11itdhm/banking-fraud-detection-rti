@@ -1,0 +1,24 @@
+// ============================================================
+// ALERT 3: Account Takeover Alert
+// Trigger: 10+ transactions/hour OR 3+ countries in 1 hour
+// Notification: Email + Teams (CRITICAL)
+// Frequency: Real-time (every 5 minutes)
+// ============================================================
+AccountTakeoverDetection()
+| where timestamp > ago(1h)
+| project
+    AlertTime = now(),
+    CustomerID = customer_id,
+    AccountID = account_id,
+    TransactionsPerHour = txn_count_per_hour,
+    CountriesUsed = unique_countries,
+    TotalAmount = total_amount,
+    Severity = "🔴 CRITICAL",
+    AlertMessage = strcat(
+        "🔐 ACCOUNT TAKEOVER ALERT: ", customer_id,
+        " — ", tostring(txn_count_per_hour), " transactions in 1 hour",
+        " across ", tostring(unique_countries), " countries",
+        " totaling $", tostring(round(total_amount, 2)),
+        " — IMMEDIATE ACTION REQUIRED!"
+    )
+| order by TransactionsPerHour desc

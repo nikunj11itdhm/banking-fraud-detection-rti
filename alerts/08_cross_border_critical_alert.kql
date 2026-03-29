@@ -1,0 +1,27 @@
+// ============================================================
+// ALERT 8: Cross-Border High-Risk Alert
+// Trigger: International transactions classified as Critical risk
+// Notification: Email + Teams
+// Frequency: Every 5 minutes
+// ============================================================
+CrossBorderFraud()
+| where risk_level == "Critical"
+| where timestamp > ago(10m)
+| project
+    AlertTime = now(),
+    TransactionID = transaction_id,
+    CustomerID = customer_id,
+    MerchantName = merchant_name,
+    Amount = amount,
+    MerchantCountry = merchant_country,
+    CustomerCountry = customer_country,
+    RiskLevel = risk_level,
+    Severity = "🔴 CRITICAL",
+    AlertMessage = strcat(
+        "🌐 CROSS-BORDER FRAUD: ", customer_id,
+        " (", customer_country, ") → ", merchant_country,
+        " $", tostring(round(amount, 2)),
+        " at ", merchant_name,
+        " — Critical-risk international transaction!"
+    )
+| order by Amount desc

@@ -562,6 +562,39 @@ Merchant ──receives──▶ Transaction
 
 ---
 
+### Step 12: Configure Fraud Alert Notifications
+
+Set up real-time **Email** and **Microsoft Teams** notifications when fraud is detected.
+
+> 📖 **Full setup guide:** See [`alerts/ALERT_SETUP_GUIDE.md`](alerts/ALERT_SETUP_GUIDE.md)
+
+#### Quick Setup (from Dashboard)
+1. Open **Banking Fraud Command Center** dashboard
+2. Hover over "Real-Time Alert Feed" tile → click **⋯** → **"Set alert"**
+3. Set condition: `fraud_score > 3`
+4. Action: ✅ Email + ✅ Teams notification
+5. Frequency: Every 5 minutes
+
+#### Alert Rules (8 Total)
+
+| Alert | Trigger | Severity | File |
+|---|---|---|---|
+| 🔴 **High-Value Fraud** | Fraud + Amount > $2,000 | Critical | `01_high_value_fraud_alert.kql` |
+| 🔴 **Velocity Attack** | Multiple txns < 5 min apart | Critical | `02_velocity_attack_alert.kql` |
+| 🔴 **Account Takeover** | 10+ txns/hr or 3+ countries | Critical | `03_account_takeover_alert.kql` |
+| 🔴 **Impossible Travel** | Country change < 4 hours | Critical | `04_impossible_travel_alert.kql` |
+| 🟠 **Amount Anomaly** | Spending 5x+ above average | High | `05_amount_anomaly_alert.kql` |
+| 🟡 **Night Activity** | Transactions 12AM–5AM | Medium | `06_night_activity_alert.kql` |
+| 🟠 **Channel Switching** | 3+ channel switches in 30 min | High | `07_multi_channel_switch_alert.kql` |
+| 🔴 **Cross-Border Critical** | International + Critical risk | Critical | `08_cross_border_critical_alert.kql` |
+
+#### Fabric Activator Item
+- **Name**: `BankingFraudAlertNotifier`
+- **Type**: Reflex (Activator)
+- **Workspace**: RTI_IQ_01
+
+---
+
 ## 📊 KQL Detection Algorithms
 
 ### Core Detection Functions
@@ -908,6 +941,21 @@ FraudDetection/
 │
 ├── 📂 dashboard/                                   # Dashboard artifacts
 │   └── 📄 dashboard_queries.kql                    #   15-tile dashboard KQL queries
+│
+├── 📂 alerts/                                      # 🔔 Fraud alert notifications
+│   ├── 📄 ALERT_SETUP_GUIDE.md                     #   Step-by-step Activator setup
+│   ├── 01_high_value_fraud_alert.kql               #   Amount > $2K + fraud flagged
+│   ├── 02_velocity_attack_alert.kql                #   Rapid-fire txns < 5 min
+│   ├── 03_account_takeover_alert.kql               #   10+ txns/hr or 3+ countries
+│   ├── 04_impossible_travel_alert.kql              #   Country change < 4 hours
+│   ├── 05_amount_anomaly_alert.kql                 #   Spending 5x+ above average
+│   ├── 06_night_activity_alert.kql                 #   Transactions 12AM–5AM
+│   ├── 07_multi_channel_switch_alert.kql           #   3+ channel switches in 30 min
+│   └── 08_cross_border_critical_alert.kql          #   Critical international txns
+│
+├── 📂 data-agent/                                  # 🤖 Data Agent configuration
+│   ├── 📄 agent_instructions.md                    #   Agent instructions + 20 test questions
+│   └── 📄 example_queries.kql                      #   15 example KQL queries for agent
 │
 └── 📂 images/                                      # Dashboard screenshots
     ├── RTI Dashboard 1.png                         #   Fraud Command Center (KPIs)

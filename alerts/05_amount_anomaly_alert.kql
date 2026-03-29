@@ -1,0 +1,30 @@
+// ============================================================
+// ALERT 5: Amount Anomaly Alert
+// Trigger: Transaction amount > 5x customer's average spending
+// Notification: Email + Teams
+// Frequency: Real-time (every 5 minutes)
+// ============================================================
+AmountAnomalyDetection()
+| where timestamp > ago(10m)
+| where amount_ratio > 5
+| project
+    AlertTime = now(),
+    TransactionID = transaction_id,
+    CustomerID = customer_id,
+    MerchantName = merchant_name,
+    Amount = amount,
+    CustomerAverage = customer_avg_amount,
+    DeviationRatio = amount_ratio,
+    Severity = case(
+        amount_ratio > 10, "🔴 CRITICAL",
+        amount_ratio > 7, "🟠 HIGH",
+        "🟡 MEDIUM"
+    ),
+    AlertMessage = strcat(
+        "💰 AMOUNT ANOMALY: ", customer_id,
+        " spent $", tostring(round(amount, 2)),
+        " at ", merchant_name,
+        " — ", tostring(round(amount_ratio, 1)), "x their average ($", tostring(round(customer_avg_amount, 2)), ")",
+        " — Possible unauthorized large purchase!"
+    )
+| order by DeviationRatio desc

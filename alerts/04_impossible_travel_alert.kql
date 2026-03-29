@@ -1,0 +1,30 @@
+// ============================================================
+// ALERT 4: Impossible Travel Alert
+// Trigger: Transactions from different countries < 4 hours apart
+// Notification: Email + Teams
+// Frequency: Real-time (every 10 minutes)
+// ============================================================
+GeographicVelocityCheck()
+| where timestamp > ago(30m)
+| project
+    AlertTime = now(),
+    TransactionID = transaction_id,
+    CustomerID = customer_id,
+    MerchantName = merchant_name,
+    Amount = amount,
+    CurrentCountry = merchant_country,
+    PreviousCountry = prev_country,
+    HoursBetween = hours_between_countries,
+    Severity = case(
+        hours_between_countries < 1, "🔴 CRITICAL",
+        hours_between_countries < 2, "🟠 HIGH",
+        "🟡 MEDIUM"
+    ),
+    AlertMessage = strcat(
+        "✈️ IMPOSSIBLE TRAVEL: ", customer_id,
+        " transacted in ", merchant_country,
+        " only ", tostring(round(hours_between_countries, 1)), "h after transaction in ", prev_country,
+        " ($", tostring(round(amount, 2)), " at ", merchant_name, ")",
+        " — Possible cloned card or compromised credentials!"
+    )
+| order by HoursBetween asc

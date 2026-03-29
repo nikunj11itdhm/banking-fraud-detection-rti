@@ -1,0 +1,28 @@
+// ============================================================
+// ALERT 7: Multi-Channel Switching Alert
+// Trigger: 3+ channel switches in 30 minutes
+// Notification: Email + Teams
+// Frequency: Every 10 minutes
+// ============================================================
+MultiChannelSwitching()
+| where timestamp > ago(30m)
+| project
+    AlertTime = now(),
+    CustomerID = customer_id,
+    AccountID = account_id,
+    ChannelSwitches = channel_switches,
+    ChannelsUsed = channels_used,
+    TotalAmount = total_amount,
+    Severity = case(
+        channel_switches > 5, "🔴 CRITICAL",
+        channel_switches > 3, "🟠 HIGH",
+        "🟡 MEDIUM"
+    ),
+    AlertMessage = strcat(
+        "🔄 CHANNEL SWITCHING: ", customer_id,
+        " switched ", tostring(channel_switches), " times in 30 min",
+        " across channels: ", channels_used,
+        " ($", tostring(round(total_amount, 2)), " total)",
+        " — Possible account compromise testing!"
+    )
+| order by ChannelSwitches desc
